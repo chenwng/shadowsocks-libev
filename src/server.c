@@ -260,7 +260,7 @@ free_connections(struct ev_loop *loop)
 }
 
 static char *
-get_peer_name(int fd)
+get_peer_name(int fd, uint16_t *port)
 {
     static char peer_name[INET6_ADDRSTRLEN] = { 0 };
     struct sockaddr_storage addr;
@@ -272,9 +272,15 @@ get_peer_name(int fd)
         if (addr.ss_family == AF_INET) {
             struct sockaddr_in *s = (struct sockaddr_in *)&addr;
             inet_ntop(AF_INET, &s->sin_addr, peer_name, INET_ADDRSTRLEN);
+            if (port != NULL) {
+                *port = s->sin_port;
+            }
         } else if (addr.ss_family == AF_INET6) {
             struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
             inet_ntop(AF_INET6, &s->sin6_addr, peer_name, INET6_ADDRSTRLEN);
+            if (port != NULL) {
+                *port = s->sin6_port;
+            }
         }
     } else {
         return NULL;
@@ -493,7 +499,7 @@ static void
 report_addr(int fd, const char *info)
 {
     char *peer_name;
-    peer_name = get_peer_name(fd);
+    peer_name = get_peer_name(fd, NULL);
     if (peer_name != NULL) {
         LOGE("failed to handshake with %s: %s", peer_name, info);
     }
@@ -1746,7 +1752,8 @@ accept_cb(EV_P_ ev_io *w, int revents)
         return;
     }
 
-    char *peer_name = get_peer_name(serverfd);
+    uint16_t port;
+    char *peer_name = get_peer_name(serverfd, &port);
     if (peer_name != NULL) {
         if (acl) {
             if ((get_acl_mode() == BLACK_LIST && acl_match_host(peer_name) == 1)
@@ -1757,6 +1764,7 @@ accept_cb(EV_P_ ev_io *w, int revents)
             }
         }
     }
+    LOGI("connection accepted from IP %s:%u", peer_name, port);
 
     int opt = 1;
     setsockopt(serverfd, SOL_TCP, TCP_NODELAY, &opt, sizeof(opt));
